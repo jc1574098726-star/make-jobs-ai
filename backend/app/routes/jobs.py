@@ -69,6 +69,15 @@ def fetch_url(payload: FetchUrlRequest) -> dict:
     return {"raw_text": "", "error": "请提供链接或岗位内容"}
 
 
+@router.post("/clear")
+def clear_jobs(session: Session = Depends(get_session)):
+    records = session.exec(select(JobRecord)).all()
+    for record in records:
+        session.delete(record)
+    session.commit()
+    return {"ok": True}
+
+
 @router.get("/{job_id}", response_model=JobView)
 def get_job(job_id: int, session: Session = Depends(get_session)) -> JobView:
     record = session.get(JobRecord, job_id)
@@ -146,12 +155,3 @@ def prepare_application(job_id: int, session: Session = Depends(get_session)) ->
         tailored_resume=tailored_view,
         application=application_record_to_view(application_record),
     )
-
-
-@router.post("/clear")
-def clear_jobs(session: Session = Depends(get_session)):
-    records = session.exec(select(JobRecord)).all()
-    for record in records:
-        session.delete(record)
-    session.commit()
-    return {"ok": True}

@@ -25,6 +25,18 @@ def list_recommendations(session: Session = Depends(get_session)) -> List[Recomm
     return [recommended_job_record_to_view(record) for record in records]
 
 
+@router.post("/clear")
+def clear_recommendations(session: Session = Depends(get_session)):
+    records = session.exec(
+        select(RecommendedJobRecord).where(RecommendedJobRecord.status != "dismissed")
+    ).all()
+    for record in records:
+        record.status = "dismissed"
+        session.add(record)
+    session.commit()
+    return {"ok": True}
+
+
 @router.post("/refresh", response_model=List[RecommendedJobView])
 def refresh_recommendations(session: Session = Depends(get_session)) -> List[RecommendedJobView]:
     profile_record = session.exec(select(ResumeProfileRecord).order_by(desc(ResumeProfileRecord.id))).first()
@@ -137,15 +149,3 @@ def import_recommendation(recommendation_id: int, session: Session = Depends(get
     session.add(record)
     session.commit()
     return job_record_to_view(job)
-
-
-@router.post("/clear")
-def clear_recommendations(session: Session = Depends(get_session)):
-    records = session.exec(
-        select(RecommendedJobRecord).where(RecommendedJobRecord.status != "dismissed")
-    ).all()
-    for record in records:
-        record.status = "dismissed"
-        session.add(record)
-    session.commit()
-    return {"ok": True}
