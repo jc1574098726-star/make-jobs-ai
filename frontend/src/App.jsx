@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   confirmApplication,
+  clearJobs,
   clearRecommendations,
   dismissRecommendation,
   fetchOverview,
@@ -420,6 +421,22 @@ export default function App() {
       setMessage('推荐岗位已清空。');
     } catch (err) {
       setError(err.message || '清空推荐岗位失败');
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  const handleClearJobs = useCallback(async () => {
+    if (!window.confirm('确定要清空所有岗位吗？此操作不可撤销。')) return;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await clearJobs();
+      await loadOverview();
+      setMessage('岗位列表已清空。');
+    } catch (err) {
+      setError(err.message || '清空岗位列表失败');
     } finally {
       setBusy(false);
     }
@@ -1103,7 +1120,12 @@ export default function App() {
 
           <div className="stack">
             <section className="panel">
-              <h2>岗位列表</h2>
+              <div className="panel-header">
+                <h2>岗位列表</h2>
+                <button type="button" className="ghost" disabled={busy} onClick={handleClearJobs}>
+                  🗑️ 清空
+                </button>
+              </div>
               <div className="list scrollable-list">
                 {(overview.jobs || []).map((job) => (
                   <article className="card" key={job.id}>
