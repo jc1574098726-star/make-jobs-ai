@@ -489,7 +489,7 @@ export default function App() {
       setSettingsForm({
         provider: pid,
         api_base_url: settingsData.api_base_url || prov.base_url || '',
-        api_key: '',
+        api_key: settingsData.configured ? '••••••••' : '',
         model: settingsData.model || (prov.models && prov.models[0]) || '',
       });
     } catch {
