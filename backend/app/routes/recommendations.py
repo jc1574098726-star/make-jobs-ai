@@ -19,7 +19,7 @@ recommender_service = JobRecommenderService()
 def list_recommendations(session: Session = Depends(get_session)) -> List[RecommendedJobView]:
     records = session.exec(
         select(RecommendedJobRecord)
-        .where(RecommendedJobRecord.status != "dismissed")
+        .where(RecommendedJobRecord.status == "new")
         .order_by(desc(RecommendedJobRecord.match_score), desc(RecommendedJobRecord.id))
     ).all()
     return [recommended_job_record_to_view(record) for record in records]
@@ -28,7 +28,7 @@ def list_recommendations(session: Session = Depends(get_session)) -> List[Recomm
 @router.post("/clear")
 def clear_recommendations(session: Session = Depends(get_session)):
     records = session.exec(
-        select(RecommendedJobRecord).where(RecommendedJobRecord.status != "dismissed")
+        select(RecommendedJobRecord).where(RecommendedJobRecord.status == "new")
     ).all()
     for record in records:
         record.status = "dismissed"
@@ -50,7 +50,7 @@ def refresh_recommendations(session: Session = Depends(get_session)) -> List[Rec
 
     # Clear old non-dismissed recommendations before adding new ones
     old_records = session.exec(
-        select(RecommendedJobRecord).where(RecommendedJobRecord.status != "dismissed")
+        select(RecommendedJobRecord).where(RecommendedJobRecord.status == "new")
     ).all()
     for old in old_records:
         session.delete(old)
@@ -103,7 +103,7 @@ def refresh_recommendations(session: Session = Depends(get_session)) -> List[Rec
     session.commit()
     records = session.exec(
         select(RecommendedJobRecord)
-        .where(RecommendedJobRecord.status != "dismissed")
+        .where(RecommendedJobRecord.status == "new")
         .order_by(desc(RecommendedJobRecord.match_score), desc(RecommendedJobRecord.id)).limit(10)
     ).all()
     return [recommended_job_record_to_view(record) for record in records]
@@ -145,7 +145,7 @@ def import_recommendation(recommendation_id: int, session: Session = Depends(get
     session.commit()
     session.refresh(job)
 
-    record.status = "imported"
+    record.status = "dismissed"
     session.add(record)
     session.commit()
     return job_record_to_view(job)
