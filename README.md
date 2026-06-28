@@ -9,54 +9,139 @@
 - **智能匹配分析** - 本地规则匹配 / AI 匹配（支持 13+ API 提供商）
 - **投递管理** - 岗位导入、匹配分析、投递记录
 
+## 环境要求
+
+- **Python** >= 3.8
+- **Node.js** >= 16
+- **Git**
+
+### Windows 用户额外要求
+
+- 安装 [Playwright 浏览器驱动](https://playwright.dev/python/docs/browsers):
+  ```bash
+  pip install playwright
+  playwright install chromium
+  ```
+
 ## 快速开始
 
-### 安装依赖
+### 1. 克隆项目
 
 ```bash
-# 后端
+git clone https://github.com/jc1574098726-star/make-jobs-ai.git
+cd make-jobs-ai
+```
+
+### 2. 安装后端依赖
+
+```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -e .
 
-# 前端
-cd frontend
+# Windows
+venv\Scripts\activate
+
+# macOS/Linux
+source venv/bin/activate
+
+pip install -e .
+```
+
+### 3. 安装 Playwright 浏览器
+
+```bash
+playwright install chromium
+```
+
+### 4. 配置环境变量（可选）
+
+复制 `.env.example` 为 `.env` 并填写配置：
+
+```bash
+cp .env.example .env
+```
+
+关键配置项：
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `APP_HOST` | 监听地址 | `127.0.0.1` |
+| `APP_PORT` | 监听端口 | `8000` |
+| `FRONTEND_ORIGIN` | 前端地址（CORS） | `http://127.0.0.1:5173` |
+| `ANTHROPIC_API_KEY` | Anthropic API 密钥（可选） | 空 |
+| `CLAUDE_MODEL` | 默认 AI 模型 | `claude-opus-4-7` |
+
+> **提示**：API 密钥也可以在前端「API 设置」中配置，支持 13+ 提供商。
+
+### 5. 安装前端依赖
+
+```bash
+cd ../frontend
 npm install
 ```
 
-### 启动服务
+### 6. 启动服务
 
 ```bash
-# 后端 (端口 8000)
+# 终端1：启动后端
 cd backend
 uvicorn app.main:app --reload
 
-# 前端 (端口 5173)
+# 终端2：启动前端
 cd frontend
 npm run dev
 ```
 
-### 访问应用
+### 7. 访问应用
 
 打开浏览器访问 http://127.0.0.1:5173
 
 ## 支持的 API 提供商
 
-- Anthropic (Claude)
-- OpenAI (ChatGPT)
-- DeepSeek
-- 小米 MiMo
-- 硅基流动 (SiliconFlow)
-- 火山引擎 (ByteDance)
-- NVIDIA
-- 智谱 (GLM)
-- MiniMax
-- Kimi (Moonshot)
-- StepFun (阶跃星辰)
-- 千问 (阿里云)
-- Google Gemini
-- 自定义 OpenAI 兼容接口
+在前端「API 设置」中选择并配置：
+
+| 提供商 | 说明 |
+|--------|------|
+| Anthropic (Claude) | Claude 系列模型 |
+| OpenAI (ChatGPT) | GPT-4o 等 |
+| DeepSeek | DeepSeek-V3/R1 |
+| 小米 MiMo | MiMo 系列 |
+| 硅基流动 (SiliconFlow) | 开源模型托管 |
+| 火山引擎 (ByteDance) | 豆包系列 |
+| NVIDIA | Llama/Nemotron |
+| 智谱 (GLM) | GLM-4 系列 |
+| MiniMax | abab 系列 |
+| Kimi (Moonshot) | Moonshot 系列 |
+| StepFun (阶跃星辰) | Step 系列 |
+| 千问 (阿里云) | Qwen 系列 |
+| Google Gemini | Gemini 系列 |
+| 自定义 | 任何 OpenAI 兼容接口 |
+
+## 常见问题
+
+### Q: 后端启动报错 `ModuleNotFoundError`
+
+A: 确保已激活虚拟环境并安装依赖：
+```bash
+cd backend
+venv\Scripts\activate  # Windows
+pip install -e .
+```
+
+### Q: Playwright 报错 `BrowserType.launch`
+
+A: 需要安装浏览器驱动：
+```bash
+playwright install chromium
+```
+
+### Q: 前端显示 "Failed to fetch"
+
+A: 确保后端已启动且端口正确（默认 8000）。
+
+### Q: 岗位爬取失败
+
+A: 部分平台可能需要登录或有反爬机制，建议使用手动导入 JD 的方式。
 
 ## 技术栈
 
