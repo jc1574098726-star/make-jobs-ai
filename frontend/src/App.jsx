@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   confirmApplication,
   clearJobs,
@@ -9,6 +9,8 @@ import {
   fetchProviders,
   fetchSettings,
   fetchUrl,
+  generateBeautifiedResume,
+  generateMarketResume,
   importJob,
   importRecommendation,
   prepareApplication,
@@ -138,8 +140,29 @@ function profileToForm(profile) {
   };
 }
 
-function parsedProfileToForm(profile) {
-  return profileToForm(profile);
+function ExpandableSection({ name, label, expanded, onToggle, children }) {
+  return (
+    <div className="section-toggle">
+      <h3 onClick={() => onToggle(name)}>{expanded ? '▾' : '▸'} {label}</h3>
+      {expanded && children}
+    </div>
+  );
+}
+
+function useButtonStatus(delay = 3000) {
+  const [status, setStatus] = useState('');
+  const run = useCallback(async (fn) => {
+    setStatus('loading');
+    try {
+      await fn();
+      setStatus('done');
+      setTimeout(() => setStatus(''), delay);
+    } catch (err) {
+      setStatus('');
+      throw err;
+    }
+  }, [delay]);
+  return [status, run];
 }
 
 function parseJsonArray(text, fallback) {
@@ -236,12 +259,17 @@ export default function App() {
   const [jobForm, setJobForm] = useState(defaultJobForm);
   const [parsedFields, setParsedFields] = useState(null);
   const [prepared, setPrepared] = useState(null);
+  const [matchResults, setMatchResults] = useState([]);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [resumeFile, setResumeFile] = useState(null);
   const [resumeParseResult, setResumeParseResult] = useState(null);
+  const [generatedResumes, setGeneratedResumes] = useState({ beautified: '', market: '' });
+  const [viewingResume, setViewingResume] = useState('');
+  const [resumeType, setResumeType] = useState('original');
+  const [matchMode, setMatchMode] = useState('local');
   const [expanded, setExpanded] = useState({});
 
   const toggleSection = useCallback((name) => {
@@ -254,9 +282,14 @@ export default function App() {
   const [availableModels, setAvailableModels] = useState([]);
   const [testingApi, setTestingApi] = useState(false);
   const [testingResult, setTestingResult] = useState('');
-  const [btnStatus, setBtnStatus] = useState({ test: '', upload: '', refresh: '' });
+  const [testStatus, runTest] = useButtonStatus();
+  const [uploadStatus, runUpload] = useButtonStatus();
+  const [refreshStatus, runRefresh] = useButtonStatus();
+  const [genResumeStatus, runGenResume] = useButtonStatus();
+  const [matchAllStatus, runMatchAll] = useButtonStatus();
+  const [connectivityStatus, runConnectivity] = useButtonStatus();
 
-  const [prefs, setPrefs] = useState({ regions: [], overseas: false, industry: [], job_titles: [], platforms: ['boss'] });
+  const [prefs, setPrefs] = useState({ regions: [], overseas: false, industry: [], job_titles: [], platforms: ['boss'], parse_mode: 'local' });
   const [regionPicker, setRegionPicker] = useState({ open: false, province: null });
   const [titleInput, setTitleInput] = useState('');
 
@@ -326,19 +359,18 @@ export default function App() {
       return;
     }
     setBusy(true);
-    setBtnStatus((s) => ({ ...s, upload: 'loading' }));
     setMessage('');
     setError('');
     try {
-      const data = await uploadResume(resumeFile);
-      setResumeParseResult(data);
-      setProfileForm(parsedProfileToForm(data.profile));
-      setMessage('简历已解析并回填到资料表单，请检查后保存。');
-      setBtnStatus((s) => ({ ...s, upload: 'done' }));
-      setTimeout(() => setBtnStatus((s) => ({ ...s, upload: '' })), 3000);
+      await runUpload(async () => {
+        const data = await uploadResume(resumeFile);
+        setResumeParseResult(data);
+        setProfileForm(profileToForm(data.profile));
+        setResumeFile(null);
+        setMessage('简历已解析并回填到资料表单，请检查后保存。');
+      });
     } catch (err) {
       setError(err.message || '简历解析失败');
-      setBtnStatus((s) => ({ ...s, upload: '' }));
     } finally {
       setBusy(false);
     }
@@ -366,18 +398,16 @@ export default function App() {
 
   async function handleRefreshRecommendations() {
     setBusy(true);
-    setBtnStatus((s) => ({ ...s, refresh: 'loading' }));
     setMessage('');
     setError('');
     try {
-      await refreshRecommendations();
-      await loadOverview();
-      setMessage('推荐岗位已刷新。');
-      setBtnStatus((s) => ({ ...s, refresh: 'done' }));
-      setTimeout(() => setBtnStatus((s) => ({ ...s, refresh: '' })), 3000);
+      await runRefresh(async () => {
+        await refreshRecommendations();
+        await loadOverview();
+        setMessage('推荐岗位已刷新。');
+      });
     } catch (err) {
       setError(err.message || '刷新推荐失败');
-      setBtnStatus((s) => ({ ...s, refresh: '' }));
     } finally {
       setBusy(false);
     }
@@ -442,17 +472,69 @@ export default function App() {
     }
   }, []);
 
-  async function handlePrepare(jobId) {
+  async function handleGenerateResumes() {
+    setBusy(true);
+    setGeneratedResumes({ beautified: '', market: '' });
+    setViewingResume('');
+    try {
+      await runGenResume(async () => {
+        const [beautified, market] = await Promise.all([
+          generateBeautifiedResume(),
+          generateMarketResume(),
+        ]);
+        setGeneratedResumes({ beautified: beautified.markdown, market: market.markdown });
+        setMessage('两种简历已生成，点击按钮查看。');
+      });
+    } catch (err) {
+      setError(err.message || '生成失败');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleMatchCheck(jobId) {
     setBusy(true);
     setMessage('');
     setError('');
+    setMatchResults([]);
     try {
-      const data = await prepareApplication(jobId);
+      const data = await prepareApplication(jobId, matchMode);
       setPrepared(data);
       await loadOverview();
-      setMessage('已生成匹配分析与定制简历。');
+      setMessage('匹配分析已生成，请查看下方面板。');
     } catch (err) {
-      setError(err.message || '生成失败');
+      setError(err.message || '匹配分析失败');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleMatchAll() {
+    const jobs = overview.jobs || [];
+    if (!jobs.length) return;
+    setBusy(true);
+    setMessage('');
+    setError('');
+    setPrepared(null);
+    setMatchResults([]);
+    try {
+      await runMatchAll(async () => {
+        const results = [];
+        for (const job of jobs) {
+          try {
+            const data = await prepareApplication(job.id, matchMode);
+            results.push(data);
+            setMatchResults([...results]);
+          } catch (err) {
+            results.push({ job, error: err.message });
+            setMatchResults([...results]);
+          }
+        }
+        await loadOverview();
+        setMessage(`已完成 ${results.length} 个岗位的匹配分析。`);
+      });
+    } catch (err) {
+      setError(err.message || '批量匹配失败');
     } finally {
       setBusy(false);
     }
@@ -511,19 +593,32 @@ export default function App() {
 
   async function handleTestApi() {
     setTestingApi(true);
-    setBtnStatus((s) => ({ ...s, test: 'loading' }));
     setTestingResult('');
     setAvailableModels([]);
     try {
-      const data = await testApiConnection(settingsForm.provider, settingsForm.api_base_url, settingsForm.api_key, settingsForm.model);
-      setAvailableModels(data.models || []);
-      const msg = data.hint || '检测成功，找到 {} 个可用模型'.replace('{}', (data.models || []).length);
-      setTestingResult(msg);
-      setBtnStatus((s) => ({ ...s, test: 'done' }));
-      setTimeout(() => setBtnStatus((s) => ({ ...s, test: '' })), 3000);
+      await runTest(async () => {
+        const data = await testApiConnection(settingsForm.provider, settingsForm.api_base_url, settingsForm.api_key, settingsForm.model);
+        setAvailableModels(data.models || []);
+        const msg = data.hint || '检测成功，找到 {} 个可用模型'.replace('{}', (data.models || []).length);
+        setTestingResult(msg);
+      });
     } catch (err) {
       setTestingResult(err.message || '检测失败');
-      setBtnStatus((s) => ({ ...s, test: '' }));
+    } finally {
+      setTestingApi(false);
+    }
+  }
+
+  async function handleConnectivityTest() {
+    setTestingApi(true);
+    setTestingResult('');
+    try {
+      await runConnectivity(async () => {
+        await testApiConnection(settingsForm.provider, settingsForm.api_base_url, settingsForm.api_key, settingsForm.model);
+        setTestingResult('连通性测试成功，API 可正常访问');
+      });
+    } catch (err) {
+      setTestingResult('连通性测试失败：' + (err.message || '无法连接'));
     } finally {
       setTestingApi(false);
     }
@@ -545,9 +640,13 @@ export default function App() {
     }
   }
 
+  const prefsTimerRef = useRef(null);
   function savePrefsDebounced(updated) {
     setPrefs(updated);
-    savePreferences(updated).catch(() => {});
+    if (prefsTimerRef.current) clearTimeout(prefsTimerRef.current);
+    prefsTimerRef.current = setTimeout(() => {
+      savePreferences(updated).catch(() => {});
+    }, 500);
   }
 
   function selectRegion(label) {
@@ -619,6 +718,13 @@ export default function App() {
     savePrefsDebounced(newPrefs);
   }
 
+  function toggleParseMode() {
+    const newMode = prefs.parse_mode === 'api' ? 'local' : 'api';
+    const newPrefs = { ...prefs, parse_mode: newMode };
+    setPrefs(newPrefs);
+    savePreferences(newPrefs).catch(() => {});
+  }
+
   return (
     <div className="page">
       <div className="shell">
@@ -684,7 +790,7 @@ export default function App() {
                 </label>
                 <div className="actions">
                   <button type="button" onClick={handleResumeUpload} disabled={busy}>
-                    {btnStatus.upload === 'loading' ? <><span className="spinner" /> 解析中…</> : btnStatus.upload === 'done' ? '解析完成' : '上传并解析'}
+                    {uploadStatus === 'loading' ? <><span className="spinner" /> 解析中…</> : uploadStatus === 'done' ? '解析完成' : '上传并解析'}
                   </button>
                   {resumeFile ? <small>已选择：{resumeFile.name}</small> : <small>请选择本地简历文件。</small>}
                 </div>
@@ -696,153 +802,144 @@ export default function App() {
                 ) : null}
               </div>
 
+              <div className="resume-gen-actions">
+                <button type="button" disabled={busy} onClick={handleGenerateResumes} className="primary-btn">
+                  {genResumeStatus === 'loading' ? <><span className="spinner" /> 生成中…</> : '生成简历'}
+                </button>
+                <button type="button" className="secondary" disabled={!generatedResumes.beautified} onClick={() => setViewingResume(viewingResume === 'beautified' ? '' : 'beautified')}>
+                  美化后简历
+                </button>
+                <button type="button" className="secondary" disabled={!generatedResumes.market} onClick={() => setViewingResume(viewingResume === 'market' ? '' : 'market')}>
+                  市场专业需求简历
+                </button>
+              </div>
+              {viewingResume && generatedResumes[viewingResume] ? (
+                <div className="panel generated-resume-panel">
+                  <h3>{viewingResume === 'beautified' ? '美化后简历' : '市场专业需求简历'}</h3>
+                  <div className="markdown">{generatedResumes[viewingResume]}</div>
+                </div>
+              ) : null}
+
               <form className="resume-form" onSubmit={handleProfileSave}>
-                <div className="section-toggle">
-                  <h3 onClick={() => toggleSection('个人信息')}>{expanded['个人信息'] ? '▾' : '▸'} 个人信息</h3>
-                  {expanded['个人信息'] && (
-                    <div className="form-grid">
-                      <label>
-                        姓名
-                        <input value={profileForm.full_name} onChange={updateField('full_name')} />
-                      </label>
-                      <label>
-                        求职意向
-                        <input value={profileForm.job_intention} onChange={updateField('job_intention')} />
-                      </label>
-                      <label>
-                        联系方式
-                        <input value={profileForm.contact} onChange={updateField('contact')} placeholder="手机号" />
-                      </label>
-                      <label>
-                        邮箱
-                        <input value={profileForm.email} onChange={updateField('email')} />
-                      </label>
-                      <label>
-                        出生年月
-                        <input value={profileForm.birth_date} onChange={updateField('birth_date')} />
-                      </label>
-                      <label>
-                        籍贯
-                        <input value={profileForm.hometown} onChange={updateField('hometown')} />
-                      </label>
-                      <label>
-                        政治面貌
-                        <input value={profileForm.political_status} onChange={updateField('political_status')} />
-                      </label>
-                      <label>
-                        兴趣爱好
-                        <input value={profileForm.hobbies} onChange={updateField('hobbies')} />
-                      </label>
-                      <label className="full">
-                        个人特长
-                        <input value={profileForm.strengths} onChange={updateField('strengths')} />
-                      </label>
-                    </div>
-                  )}
-                </div>
-
-                <div className="section-toggle">
-                  <h3 onClick={() => toggleSection('自我评价')}>{expanded['自我评价'] ? '▾' : '▸'} 自我评价</h3>
-                  {expanded['自我评价'] && (
-                    <label className="full">
-                      <textarea value={profileForm.self_evaluation} onChange={updateField('self_evaluation')} />
+                <ExpandableSection name="个人信息" label="个人信息" expanded={expanded['个人信息']} onToggle={toggleSection}>
+                  <div className="form-grid">
+                    <label>
+                      姓名
+                      <input value={profileForm.full_name} onChange={updateField('full_name')} />
                     </label>
-                  )}
-                </div>
-
-                <div className="section-toggle">
-                  <h3 onClick={() => toggleSection('教育背景')}>{expanded['教育背景'] ? '▾' : '▸'} 教育背景</h3>
-                  {expanded['教育背景'] && (
-                    <label className="full">
-                      <textarea
-                        rows={4}
-                        value={profileForm.education_background}
-                        onChange={updateField('education_background')}
-                      />
+                    <label>
+                      求职意向
+                      <input value={profileForm.job_intention} onChange={updateField('job_intention')} />
                     </label>
-                  )}
-                </div>
-
-                <div className="section-toggle">
-                  <h3 onClick={() => toggleSection('实习经历')}>{expanded['实习经历'] ? '▾' : '▸'} 实习经历</h3>
-                  {expanded['实习经历'] && (
-                    <label className="full">
-                      <textarea
-                        rows={6}
-                        value={profileForm.internship_experiences}
-                        onChange={updateField('internship_experiences')}
-                      />
+                    <label>
+                      联系方式
+                      <input value={profileForm.contact} onChange={updateField('contact')} placeholder="手机号" />
                     </label>
-                  )}
-                </div>
-
-                <div className="section-toggle">
-                  <h3 onClick={() => toggleSection('项目经历')}>{expanded['项目经历'] ? '▾' : '▸'} 项目经历</h3>
-                  {expanded['项目经历'] && (
-                    <label className="full">
-                      <textarea
-                        rows={6}
-                        value={profileForm.project_experiences}
-                        onChange={updateField('project_experiences')}
-                      />
+                    <label>
+                      邮箱
+                      <input value={profileForm.email} onChange={updateField('email')} />
                     </label>
-                  )}
-                </div>
-
-                <div className="section-toggle">
-                  <h3 onClick={() => toggleSection('校园经历')}>{expanded['校园经历'] ? '▾' : '▸'} 校园经历</h3>
-                  {expanded['校园经历'] && (
-                    <label className="full">
-                      <textarea
-                        rows={4}
-                        value={profileForm.campus_experiences}
-                        onChange={updateField('campus_experiences')}
-                      />
+                    <label>
+                      出生年月
+                      <input value={profileForm.birth_date} onChange={updateField('birth_date')} />
                     </label>
-                  )}
-                </div>
-
-                <div className="section-toggle">
-                  <h3 onClick={() => toggleSection('荣誉证书')}>{expanded['荣誉证书'] ? '▾' : '▸'} 荣誉证书</h3>
-                  {expanded['荣誉证书'] && (
-                    <label className="full">
-                      <textarea
-                        rows={3}
-                        value={profileForm.honors_and_certificates}
-                        onChange={updateField('honors_and_certificates')}
-                      />
+                    <label>
+                      籍贯
+                      <input value={profileForm.hometown} onChange={updateField('hometown')} />
                     </label>
-                  )}
-                </div>
-
-                <div className="section-toggle">
-                  <h3 onClick={() => toggleSection('培训经历')}>{expanded['培训经历'] ? '▾' : '▸'} 培训经历</h3>
-                  {expanded['培训经历'] && (
-                    <label className="full">
-                      <textarea
-                        rows={3}
-                        value={profileForm.training_experiences}
-                        onChange={updateField('training_experiences')}
-                      />
+                    <label>
+                      政治面貌
+                      <input value={profileForm.political_status} onChange={updateField('political_status')} />
                     </label>
-                  )}
-                </div>
+                    <label>
+                      兴趣爱好
+                      <input value={profileForm.hobbies} onChange={updateField('hobbies')} />
+                    </label>
+                    <label className="full">
+                      个人特长
+                      <input value={profileForm.strengths} onChange={updateField('strengths')} />
+                    </label>
+                  </div>
+                </ExpandableSection>
 
-                <div className="section-toggle">
-                  <h3 onClick={() => toggleSection('技能及其他')}>{expanded['技能及其他'] ? '▾' : '▸'} 技能及其他</h3>
-                  {expanded['技能及其他'] && (
-                    <div className="form-grid">
-                      <label className="full">
-                        技能（逗号分隔）
-                        <textarea value={profileForm.skills_text} onChange={updateField('skills_text')} />
-                      </label>
-                      <label className="full">
-                        其他说明
-                        <textarea value={profileForm.other_text} onChange={updateField('other_text')} />
-                      </label>
-                    </div>
-                  )}
-                </div>
+                <ExpandableSection name="自我评价" label="自我评价" expanded={expanded['自我评价']} onToggle={toggleSection}>
+                  <label className="full">
+                    <textarea value={profileForm.self_evaluation} onChange={updateField('self_evaluation')} />
+                  </label>
+                </ExpandableSection>
+
+                <ExpandableSection name="教育背景" label="教育背景" expanded={expanded['教育背景']} onToggle={toggleSection}>
+                  <label className="full">
+                    <textarea
+                      rows={4}
+                      value={profileForm.education_background}
+                      onChange={updateField('education_background')}
+                    />
+                  </label>
+                </ExpandableSection>
+
+                <ExpandableSection name="实习经历" label="实习经历" expanded={expanded['实习经历']} onToggle={toggleSection}>
+                  <label className="full">
+                    <textarea
+                      rows={6}
+                      value={profileForm.internship_experiences}
+                      onChange={updateField('internship_experiences')}
+                    />
+                  </label>
+                </ExpandableSection>
+
+                <ExpandableSection name="项目经历" label="项目经历" expanded={expanded['项目经历']} onToggle={toggleSection}>
+                  <label className="full">
+                    <textarea
+                      rows={6}
+                      value={profileForm.project_experiences}
+                      onChange={updateField('project_experiences')}
+                    />
+                  </label>
+                </ExpandableSection>
+
+                <ExpandableSection name="校园经历" label="校园经历" expanded={expanded['校园经历']} onToggle={toggleSection}>
+                  <label className="full">
+                    <textarea
+                      rows={4}
+                      value={profileForm.campus_experiences}
+                      onChange={updateField('campus_experiences')}
+                    />
+                  </label>
+                </ExpandableSection>
+
+                <ExpandableSection name="荣誉证书" label="荣誉证书" expanded={expanded['荣誉证书']} onToggle={toggleSection}>
+                  <label className="full">
+                    <textarea
+                      rows={3}
+                      value={profileForm.honors_and_certificates}
+                      onChange={updateField('honors_and_certificates')}
+                    />
+                  </label>
+                </ExpandableSection>
+
+                <ExpandableSection name="培训经历" label="培训经历" expanded={expanded['培训经历']} onToggle={toggleSection}>
+                  <label className="full">
+                    <textarea
+                      rows={3}
+                      value={profileForm.training_experiences}
+                      onChange={updateField('training_experiences')}
+                    />
+                  </label>
+                </ExpandableSection>
+
+                <ExpandableSection name="技能及其他" label="技能及其他" expanded={expanded['技能及其他']} onToggle={toggleSection}>
+                  <div className="form-grid">
+                    <label className="full">
+                      技能（逗号分隔）
+                      <textarea value={profileForm.skills_text} onChange={updateField('skills_text')} />
+                    </label>
+                    <label className="full">
+                      其他说明
+                      <textarea value={profileForm.other_text} onChange={updateField('other_text')} />
+                    </label>
+                  </div>
+                </ExpandableSection>
 
                 <div className="actions">
                   <button disabled={busy}>保存资料</button>
@@ -854,9 +951,33 @@ export default function App() {
             <section className="panel">
               <div className="panel-header">
                 <h2>推荐岗位</h2>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span
+                    onClick={toggleParseMode}
+                    title={prefs.parse_mode === 'api' ? '当前：调用API解析（速度较慢，分析更精准）\n点击切换为本地解析' : '当前：本地解析（速度快，无需API）\n点击切换为调用API'}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 6,
+                      padding: '4px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer',
+                      background: prefs.parse_mode === 'api' ? '#6366f1' : '#374151',
+                      color: '#e5e7eb', border: '1px solid #4b5563', userSelect: 'none',
+                      transition: 'background 0.2s',
+                    }}
+                  >
+                    <span style={{
+                      width: 32, height: 18, borderRadius: 9, position: 'relative',
+                      background: prefs.parse_mode === 'api' ? '#818cf8' : '#6b7280',
+                      transition: 'background 0.2s',
+                    }}>
+                      <span style={{
+                        position: 'absolute', top: 2, left: prefs.parse_mode === 'api' ? 16 : 2,
+                        width: 14, height: 14, borderRadius: '50%', background: '#fff',
+                        transition: 'left 0.2s',
+                      }} />
+                    </span>
+                    {prefs.parse_mode === 'api' ? 'API解析' : '本地解析'}
+                  </span>
                   <button type="button" className="secondary" disabled={busy} onClick={handleRefreshRecommendations}>
-                    {btnStatus.refresh === 'loading' ? <><span className="spinner" /> 刷新中…</> : btnStatus.refresh === 'done' ? '刷新成功' : '刷新推荐岗位'}
+                    {refreshStatus === 'loading' ? <><span className="spinner" /> 刷新中…</> : refreshStatus === 'done' ? '刷新成功' : '刷新推荐岗位'}
                   </button>
                   <button type="button" className="ghost" disabled={busy} onClick={handleClearRecommendations}>
                     🗑️ 清空
@@ -1120,8 +1241,40 @@ export default function App() {
 
           <div className="stack">
             <section className="panel">
-              <div className="panel-header">
-                <h2>岗位列表</h2>
+              <div className="panel-header-row">
+                <h2 style={{ margin: 0 }}>岗位列表</h2>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {[
+                    { key: 'original', label: '本人简历' },
+                    { key: 'beautified', label: '美化后简历' },
+                    { key: 'market', label: '市场需求简历' },
+                  ].map(({ key, label }) => {
+                    const active = resumeType === key;
+                    return (
+                    <span
+                      key={key}
+                      onClick={() => setResumeType(key)}
+                      className={`resume-type-option${active ? ' active' : ''}`}
+                    >
+                      <span className="radio-indicator">
+                        {active && <span className="radio-dot" />}
+                      </span>
+                      {label}
+                    </span>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="panel-header-actions">
+                <span
+                  onClick={() => setMatchMode(m => m === 'local' ? 'ai' : 'local')}
+                  className={`match-mode-toggle${matchMode === 'ai' ? ' active' : ''}`}
+                >
+                  {matchMode === 'ai' ? 'AI匹配' : '本地规则'}
+                </span>
+                <button type="button" className="secondary" disabled={busy || !(overview.jobs || []).length} onClick={handleMatchAll} style={{ fontSize: 12 }}>
+                  {matchAllStatus === 'loading' ? <><span className="spinner" /> 匹配中…</> : '匹配度检测'}
+                </button>
                 <button type="button" className="ghost" disabled={busy} onClick={handleClearJobs}>
                   🗑️ 清空
                 </button>
@@ -1134,9 +1287,6 @@ export default function App() {
                         <h4>{job.job_title}</h4>
                         <p>{job.company_name}{job.company_name === '待确认公司' ? '，请进详情查看' : ''}</p>
                       </div>
-                      <button className="secondary" disabled={busy} onClick={() => handlePrepare(job.id)}>
-                        生成定制简历
-                      </button>
                     </header>
                     <div className="inline-meta">
                       <small>{job.platform_label}</small>
@@ -1159,54 +1309,76 @@ export default function App() {
             <section className="panel">
               <h2>匹配分析与投递确认</h2>
               <div className="scrollable-list">
-              {prepared ? (
-                <>
-                  <div className="card">
+              {matchResults.length > 0 && matchResults.map((item, idx) => {
+                if (item.error) {
+                  return (
+                    <div className="card" key={idx} style={{ opacity: 0.6 }}>
+                      <header>
+                        <div>
+                          <h4>{item.job?.job_title || '未知岗位'}</h4>
+                          <p>{item.job?.company_name || ''}</p>
+                        </div>
+                        <span style={{ color: '#ef4444', fontSize: 13 }}>匹配失败</span>
+                      </header>
+                      <small>{item.error}</small>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="card" key={item.application?.id || idx}>
                     <header>
                       <div>
-                        <h4>{prepared.job.job_title}</h4>
-                        <p>{prepared.job.company_name}</p>
+                        <h4>{item.job?.job_title || '未知岗位'}</h4>
+                        <p>{item.job?.company_name || ''}</p>
                       </div>
-                      <strong>{prepared.analysis.match_score} 分</strong>
+                      <strong style={{ color: (item.analysis?.match_score || 0) >= 70 ? '#10b981' : (item.analysis?.match_score || 0) >= 40 ? '#f59e0b' : '#ef4444' }}>
+                        {item.analysis?.match_score || 0} 分
+                      </strong>
                     </header>
-                    <p>{prepared.analysis.recommendation}</p>
-                    <h3>命中技能</h3>
+                    <p>{item.analysis?.recommendation || ''}</p>
                     <div className="tags">
-                      {(prepared.analysis.matched_skills || []).map((skill) => (
+                      {(item.analysis?.matched_skills || []).map((skill) => (
                         <span className="tag" key={skill}>{skill}</span>
                       ))}
-                    </div>
-                    <h3>缺口项</h3>
-                    <div className="tags">
-                      {(prepared.analysis.missing_skills || []).map((skill) => (
-                        <span className="tag" key={skill}>{skill}</span>
-                      ))}
-                      {!prepared.analysis.missing_skills?.length ? <small>暂无明显缺口。</small> : null}
-                    </div>
-                    <h3>投递草稿</h3>
-                    <div className="inline-meta">
-                      <small>平台：{prepared.application.platform_label}</small>
-                      <small>状态：{prepared.application.status}</small>
-                      <small>
-                        {prepared.application.auto_supported ? '支持自动化投递' : '当前为手动投递流'}
-                      </small>
                     </div>
                     <div className="actions">
                       <button
-                        disabled={busy || prepared.application.status === 'confirmed'}
-                        onClick={() => handleConfirm(prepared.application.id)}
+                        disabled={busy || item.application?.status === 'confirmed'}
+                        onClick={() => handleConfirm(item.application?.id)}
                       >
-                        确认投递
+                        {item.application?.status === 'confirmed' ? '已确认' : '确认投递'}
                       </button>
                     </div>
                   </div>
-                  <div className="panel" style={{ padding: 0, border: '0', boxShadow: 'none' }}>
-                    <h3>定制简历 Markdown</h3>
-                    <div className="markdown">{prepared.tailored_resume.rendered_markdown}</div>
+                );
+              })}
+              {!matchResults.length && prepared && (
+                <div className="card">
+                  <header>
+                    <div>
+                      <h4>{prepared.job.job_title}</h4>
+                      <p>{prepared.job.company_name}</p>
+                    </div>
+                    <strong>{prepared.analysis.match_score} 分</strong>
+                  </header>
+                  <p>{prepared.analysis.recommendation}</p>
+                  <div className="tags">
+                    {(prepared.analysis.matched_skills || []).map((skill) => (
+                      <span className="tag" key={skill}>{skill}</span>
+                    ))}
                   </div>
-                </>
-              ) : (
-                <small>从岗位列表选择"生成定制简历"后，这里会展示匹配分析与简历预览。</small>
+                  <div className="actions">
+                    <button
+                      disabled={busy || prepared.application.status === 'confirmed'}
+                      onClick={() => handleConfirm(prepared.application.id)}
+                    >
+                      {prepared.application.status === 'confirmed' ? '已确认' : '确认投递'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {!matchResults.length && !prepared && (
+                <small>点击上方"匹配度检测"按钮，对所有岗位进行匹配分析。</small>
               )}
               </div>
             </section>
@@ -1226,7 +1398,7 @@ export default function App() {
                     <p>{item.notes || '暂无备注'}</p>
                     <div className="inline-meta">
                       <small>{item.auto_supported ? '自动化平台' : '手动平台'}</small>
-                      {item.target_url ? <small>{item.target_url}</small> : null}
+                      {item.target_url ? <small className="url-truncate" title={item.target_url}>{item.target_url.replace(/^(https?:\/\/[^/]+).*/, '$1...')}</small> : null}
                     </div>
                   </article>
                 ))}
@@ -1273,9 +1445,12 @@ export default function App() {
                   placeholder="留空则不修改已有密钥"
                 />
               </label>
-              <div className="actions">
+              <div className="actions" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <button type="button" className="secondary" onClick={handleTestApi} disabled={testingApi}>
-                  {btnStatus.test === 'loading' ? <><span className="spinner" /> 检测中…</> : btnStatus.test === 'done' ? '检测完成' : '检测可用模型'}
+                  {testStatus === 'loading' ? <><span className="spinner" /> 检测中…</> : testStatus === 'done' ? '检测完成' : '检测可用模型'}
+                </button>
+                <button type="button" className="secondary" onClick={handleConnectivityTest} disabled={testingApi}>
+                  {connectivityStatus === 'loading' ? <><span className="spinner" /> 测试中…</> : connectivityStatus === 'done' ? '测试成功' : '连通性测试'}
                 </button>
                 {testingResult ? <small>{testingResult}</small> : null}
               </div>
@@ -1288,7 +1463,7 @@ export default function App() {
                 />
               </label>
               {availableModels.length > 0 ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: -4 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: -4, maxHeight: 240, overflowY: 'auto', padding: '4px 0' }}>
                   {availableModels.map((m) => (
                     <button
                       key={m}

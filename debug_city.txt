@@ -1,0 +1,7 @@
+filter city: 舟山
+filter city hex: e8889fe5b1b1
+item[0] city=临沂·兰山区, hex=e4b8b4e6b282c2b7e585b0e5b1b1e58cba, match=False
+item[1] city=临沂, hex=e4b8b4e6b282, match=False
+item[2] city=上海·松江区, hex=e4b88ae6b5b7c2b7e69dbee6b19fe58cba, match=False
+item[3] city=上海·浦东新区, hex=e4b88ae6b5b7c2b7e6b5a6e4b89ce696b0e58cba, match=False
+item[4] city=上海, hex=e4b88ae6b5b7, match=False

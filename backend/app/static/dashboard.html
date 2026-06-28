@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能求职助手 - 控制台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --primary: #6366f1;
+            --primary-light: #818cf8;
+            --primary-dark: #4f46e5;
+            --bg: #0f172a;
+            --bg-card: #1e293b;
+            --bg-hover: #334155;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: #334155;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 240px;
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+            padding: 20px 0;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .logo {
+            padding: 0 20px 24px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+
+        .logo h1 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary-light);
+        }
+
+        .logo p {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .nav-item:hover {
+            background: var(--bg-hover);
+            color: var(--text);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(90deg, var(--primary) 0%, transparent 100%);
+            color: white;
+            border-left: 3px solid var(--primary-light);
+        }
+
+        .nav-item svg {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            margin-left: 240px;
+            padding: 24px;
+        }
+
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        .page-header {
+            margin-bottom: 24px;
+        }
+
+        .page-header h2 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .page-header p {
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* Cards */
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .card-stat {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .card-icon.blue { background: rgba(59, 130, 246, 0.15); }
+        .card-icon.green { background: rgba(34, 197, 94, 0.15); }
+        .card-icon.purple { background: rgba(139, 92, 246, 0.15); }
+        .card-icon.orange { background: rgba(249, 115, 22, 0.15); }
+
+        .card-info h3 {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .card-info p {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        /* Tables */
+        .table-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .table-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+
+        th {
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        tr:hover td {
+            background: var(--bg-hover);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-new { background: rgba(59, 130, 246, 0.15); color: var(--info); }
+        .badge-draft { background: rgba(249, 115, 22, 0.15); color: var(--warning); }
+        .badge-confirmed { background: rgba(34, 197, 94, 0.15); color: var(--success); }
+        .badge-dismissed { background: rgba(107, 114, 128, 0.15); color: var(--text-muted); }
+
+        /* Score bar */
+        .score-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .score-track {
+            flex: 1;
+            height: 6px;
+            background: var(--bg-hover);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .score-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        .score-fill.high { background: var(--success); }
+        .score-fill.medium { background: var(--warning); }
+        .score-fill.low { background: var(--danger); }
+
+        .score-value {
+            font-size: 13px;
+            font-weight: 600;
+            min-width: 35px;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+        }
+
+        .btn-ghost:hover {
+            background: var(--bg-hover);
+            color: var(--text);
+        }
+
+        .btn-danger {
+            background: transparent;
+            color: var(--danger);
+            border: 1px solid var(--danger);
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 14px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        select.form-input {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2394a3b8'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 16px;
+            padding-right: 40px;
+        }
+
+        /* Profile Section */
+        .profile-section {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 24px;
+        }
+
+        .profile-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--primary-light));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .profile-info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+
+        .profile-info-item .label {
+            color: var(--text-muted);
+        }
+
+        .skills-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .skill-tag {
+            padding: 6px 12px;
+            background: var(--bg-hover);
+            border-radius: 20px;
+            font-size: 13px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .toast.success { border-color: var(--success); }
+        .toast.error { border-color: var(--danger); }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main { margin-left: 0; }
+            .profile-section { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <h1>智能求职助手</h1>
+                <p>控制台</p>
+            </div>
+            <nav>
+                <div class="nav-item active" data-page="overview">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                    总览
+                </div>
+                <div class="nav-item" data-page="resume">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+                    简历资料
+                </div>
+                <div class="nav-item" data-page="recommendations">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                    推荐岗位
+                </div>
+                <div class="nav-item" data-page="jobs">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                    岗位列表
+                </div>
+                <div class="nav-item" data-page="applications">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg>
+                    投递记录
+                </div>
+                <div class="nav-item" data-page="settings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                    API 设置
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Overview Page -->
+            <div id="page-overview" class="page active">
+                <div class="page-header">
+                    <h2>总览</h2>
+                    <p>求职进度一目了然</p>
+                </div>
+                <div class="cards" id="overview-cards">
+                    <div class="card card-stat">
+                        <div class="card-icon blue">&#128196;</div>
+                        <div class="card-info">
+                            <h3 id="stat-jobs">-</h3>
+                            <p>岗位总数</p>
+                        </div>
+                    </div>
+                    <div class="card card-stat">
+                        <div class="card-icon green">&#11088;</div>
+                        <div class="card-info">
+                            <h3 id="stat-recommendations">-</h3>
+                            <p>推荐岗位</p>
+                        </div>
+                    </div>
+                    <div class="card card-stat">
+                        <div class="card-icon purple">&#9993;</div>
+                        <div class="card-info">
+                            <h3 id="stat-applications">-</h3>
+                            <p>投递记录</p>
+                        </div>
+                    </div>
+                    <div class="card card-stat">
+                        <div class="card-icon orange">&#128100;</div>
+                        <div class="card-info">
+                            <h3 id="stat-profile">-</h3>
+                            <p>简历状态</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>最近推荐</h3>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>岗位名称</th>
+                                <th>公司</th>
+                                <th>城市</th>
+                                <th>匹配度</th>
+                                <th>状态</th>
+                            </tr>
+                        </thead>
+                        <tbody id="overview-recommendations">
+                            <tr><td colspan="5" class="loading"><div class="spinner"></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Resume Page -->
+            <div id="page-resume" class="page">
+                <div class="page-header">
+                    <h2>简历资料</h2>
+                    <p>管理你的简历信息</p>
+                </div>
+                <div class="card" id="resume-content">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+
+            <!-- Recommendations Page -->
+            <div id="page-recommendations" class="page">
+                <div class="page-header">
+                    <h2>推荐岗位</h2>
+                    <p>AI 为你推荐的匹配岗位</p>
+                </div>
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>推荐列表</h3>
+                        <div>
+                            <button class="btn btn-primary" onclick="refreshRecommendations()">刷新推荐</button>
+                            <button class="btn btn-ghost" onclick="clearRecommendations()">清空</button>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>岗位名称</th>
+                                <th>公司</th>
+                                <th>城市</th>
+                                <th>薪资</th>
+                                <th>匹配度</th>
+                                <th>平台</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recommendations-list">
+                            <tr><td colspan="7" class="loading"><div class="spinner"></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Jobs Page -->
+            <div id="page-jobs" class="page">
+                <div class="page-header">
+                    <h2>岗位列表</h2>
+                    <p>已导入的岗位信息</p>
+                </div>
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>岗位列表</h3>
+                        <button class="btn btn-ghost" onclick="clearJobs()">清空</button>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>岗位名称</th>
+                                <th>公司</th>
+                                <th>城市</th>
+                                <th>薪资</th>
+                                <th>平台</th>
+                                <th>添加时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="jobs-list">
+                            <tr><td colspan="7" class="loading"><div class="spinner"></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Applications Page -->
+            <div id="page-applications" class="page">
+                <div class="page-header">
+                    <h2>投递记录</h2>
+                    <p>跟踪你的求职进度</p>
+                </div>
+                <div class="table-container">
+                    <div class="table-header">
+                        <h3>投递列表</h3>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>岗位名称</th>
+                                <th>公司</th>
+                                <th>平台</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>确认时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="applications-list">
+                            <tr><td colspan="6" class="loading"><div class="spinner"></div></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="page-settings" class="page">
+                <div class="page-header">
+                    <h2>API 设置</h2>
+                    <p>配置 AI 服务提供商</p>
+                </div>
+                <div class="card" style="max-width: 600px;">
+                    <form id="settings-form">
+                        <div class="form-group">
+                            <label>AI 提供商</label>
+                            <select class="form-input" id="provider-select">
+                                <option value="anthropic">Anthropic (Claude)</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="deepseek">DeepSeek</option>
+                                <option value="zhipu">智谱 AI</option>
+                                <option value="moonshot">Moonshot (Kimi)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>API 地址</label>
+                            <input type="text" class="form-input" id="api-base-url" placeholder="留空使用默认地址">
+                        </div>
+                        <div class="form-group">
+                            <label>API 密钥</label>
+                            <input type="password" class="form-input" id="api-key" placeholder="输入 API 密钥">
+                        </div>
+                        <div class="form-group">
+                            <label>模型</label>
+                            <input type="text" class="form-input" id="model" placeholder="例如: claude-3-5-sonnet-20241022">
+                        </div>
+                        <div style="display: flex; gap: 12px;">
+                            <button type="button" class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+                            <button type="button" class="btn btn-ghost" onclick="testConnection()">测试连接</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000';
+
+        // Navigation
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+                item.classList.add('active');
+                document.getElementById('page-' + item.dataset.page).classList.add('active');
+                loadPageData(item.dataset.page);
+            });
+        });
+
+        // Toast notification
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast ' + type + ' show';
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // API calls
+        async function fetchAPI(endpoint, options = {}) {
+            try {
+                const response = await fetch(API_BASE + endpoint, options);
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.detail || '请求失败');
+                }
+                return await response.json();
+            } catch (error) {
+                showToast(error.message, 'error');
+                throw error;
+            }
+        }
+
+        // Format date
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Score class
+        function scoreClass(score) {
+            if (score >= 70) return 'high';
+            if (score >= 40) return 'medium';
+            return 'low';
+        }
+
+        // Load overview data
+        async function loadOverview() {
+            try {
+                const data = await fetchAPI('/overview');
+
+                document.getElementById('stat-jobs').textContent = data.jobs?.length || 0;
+                document.getElementById('stat-recommendations').textContent = data.recommended_jobs?.length || 0;
+                document.getElementById('stat-applications').textContent = data.applications?.length || 0;
+                document.getElementById('stat-profile').textContent = data.profile ? '已完善' : '未设置';
+
+                const tbody = document.getElementById('overview-recommendations');
+                if (data.recommended_jobs?.length) {
+                    tbody.innerHTML = data.recommended_jobs.slice(0, 5).map(job => `
+                        <tr>
+                            <td>${job.job_title}</td>
+                            <td>${job.company_name}</td>
+                            <td>${job.city || '-'}</td>
+                            <td>
+                                <div class="score-bar">
+                                    <div class="score-track"><div class="score-fill ${scoreClass(job.match_score)}" style="width:${job.match_score}%"></div></div>
+                                    <span class="score-value">${job.match_score}%</span>
+                                </div>
+                            </td>
+                            <td><span class="badge badge-new">新推荐</span></td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><p>暂无推荐岗位</p></td></tr>';
+                }
+            } catch (error) {
+                console.error('Failed to load overview:', error);
+            }
+        }
+
+        // Load resume
+        async function loadResume() {
+            try {
+                const profile = await fetchAPI('/resume-profile');
+                const container = document.getElementById('resume-content');
+
+                if (!profile) {
+                    container.innerHTML = '<div class="empty-state"><p>暂未上传简历，请在前端上传</p></div>';
+                    return;
+                }
+
+                const pi = profile.personal_info || {};
+                container.innerHTML = `
+                    <div class="profile-section">
+                        <div>
+                            <div class="profile-avatar">${(pi.full_name || '?')[0]}</div>
+                            <h3 style="margin-bottom: 8px;">${pi.full_name || '-'}</h3>
+                            <p style="color: var(--text-muted); font-size: 14px;">${pi.job_intention || '-'}</p>
+                        </div>
+                        <div>
+                            <h4 style="margin-bottom: 12px;">个人信息</h4>
+                            <div class="profile-info-item"><span class="label">电话</span><span>${pi.contact || '-'}</span></div>
+                            <div class="profile-info-item"><span class="label">邮箱</span><span>${pi.email || '-'}</span></div>
+                            <div class="profile-info-item"><span class="label">籍贯</span><span>${pi.hometown || '-'}</span></div>
+                            <div class="profile-info-item"><span class="label">出生年月</span><span>${pi.birth_date || '-'}</span></div>
+                            <div class="profile-info-item"><span class="label">政治面貌</span><span>${pi.political_status || '-'}</span></div>
+
+                            ${profile.education_background?.length ? `
+                                <h4 style="margin: 20px 0 12px;">教育背景</h4>
+                                ${profile.education_background.map(edu => `
+                                    <div class="profile-info-item"><span class="label">${edu.school_name || '-'}</span><span>${edu.attendance_period || ''} ${edu.degree || ''}</span></div>
+                                `).join('')}
+                            ` : ''}
+
+                            ${profile.skills_and_other?.skills?.length ? `
+                                <h4 style="margin: 20px 0 12px;">技能标签</h4>
+                                <div class="skills-tags">
+                                    ${profile.skills_and_other.skills.map(s => `<span class="skill-tag">${s}</span>`).join('')}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Failed to load resume:', error);
+            }
+        }
+
+        // Load recommendations
+        async function loadRecommendations() {
+            try {
+                const data = await fetchAPI('/recommendations');
+                const tbody = document.getElementById('recommendations-list');
+
+                if (data.length) {
+                    tbody.innerHTML = data.map(job => `
+                        <tr>
+                            <td><a href="${job.source_url || '#'}" target="_blank" style="color: var(--primary-light); text-decoration: none;">${job.job_title}</a></td>
+                            <td>${job.company_name}</td>
+                            <td>${job.city || '-'}</td>
+                            <td>${job.salary_range || '-'}</td>
+                            <td>
+                                <div class="score-bar">
+                                    <div class="score-track"><div class="score-fill ${scoreClass(job.match_score)}" style="width:${job.match_score}%"></div></div>
+                                    <span class="score-value">${job.match_score}%</span>
+                                </div>
+                            </td>
+                            <td>${job.platform}</td>
+                            <td><button class="btn btn-ghost" onclick="importRecommendation(${job.id})">导入</button></td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><p>暂无推荐岗位，点击"刷新推荐"获取</p></td></tr>';
+                }
+            } catch (error) {
+                console.error('Failed to load recommendations:', error);
+            }
+        }
+
+        // Load jobs
+        async function loadJobs() {
+            try {
+                const data = await fetchAPI('/jobs');
+                const tbody = document.getElementById('jobs-list');
+
+                if (data.length) {
+                    tbody.innerHTML = data.map(job => `
+                        <tr>
+                            <td><a href="${job.source_url || '#'}" target="_blank" style="color: var(--primary-light); text-decoration: none;">${job.job_title}</a></td>
+                            <td>${job.company_name}</td>
+                            <td>${job.city || '-'}</td>
+                            <td>${job.salary_range || '-'}</td>
+                            <td>${job.platform}</td>
+                            <td>${formatDate(job.created_at)}</td>
+                            <td><button class="btn btn-primary" onclick="prepareApplication(${job.id})">生成简历</button></td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="7" class="empty-state"><p>暂无岗位，请导入或从推荐中添加</p></td></tr>';
+                }
+            } catch (error) {
+                console.error('Failed to load jobs:', error);
+            }
+        }
+
+        // Load applications
+        async function loadApplications() {
+            try {
+                const data = await fetchAPI('/applications');
+                const tbody = document.getElementById('applications-list');
+
+                if (data.length) {
+                    tbody.innerHTML = data.map(app => `
+                        <tr>
+                            <td>${app.job_id ? `岗位 #${app.job_id}` : '-'}</td>
+                            <td>-</td>
+                            <td>${app.platform}</td>
+                            <td><span class="badge badge-${app.status}">${statusText(app.status)}</span></td>
+                            <td>${formatDate(app.created_at)}</td>
+                            <td>${formatDate(app.confirmed_at)}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><p>暂无投递记录</p></td></tr>';
+                }
+            } catch (error) {
+                console.error('Failed to load applications:', error);
+            }
+        }
+
+        function statusText(status) {
+            const map = { new: '新推荐', draft: '草稿', confirmed: '已确认', dismissed: '已忽略' };
+            return map[status] || status;
+        }
+
+        // Load settings
+        async function loadSettings() {
+            try {
+                const data = await fetchAPI('/settings');
+                document.getElementById('provider-select').value = data.provider || 'anthropic';
+                document.getElementById('api-base-url').value = data.api_base_url || '';
+                document.getElementById('model').value = data.model || '';
+                if (data.configured) {
+                    document.getElementById('api-key').value = '••••••••';
+                }
+            } catch (error) {
+                console.error('Failed to load settings:', error);
+            }
+        }
+
+        // Save settings
+        async function saveSettings() {
+            const payload = {
+                provider: document.getElementById('provider-select').value,
+                api_base_url: document.getElementById('api-base-url').value,
+                api_key: document.getElementById('api-key').value,
+                model: document.getElementById('model').value,
+            };
+            try {
+                await fetchAPI('/settings', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                showToast('设置已保存');
+                loadSettings();
+            } catch (error) {
+                console.error('Failed to save settings:', error);
+            }
+        }
+
+        // Test connection
+        async function testConnection() {
+            const payload = {
+                provider: document.getElementById('provider-select').value,
+                api_base_url: document.getElementById('api-base-url').value,
+                api_key: document.getElementById('api-key').value,
+                model: document.getElementById('model').value,
+            };
+            try {
+                const result = await fetchAPI('/settings/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (result.success) {
+                    showToast('连接成功！' + (result.models?.length ? ` 发现 ${result.models.length} 个模型` : ''));
+                }
+            } catch (error) {
+                console.error('Test failed:', error);
+            }
+        }
+
+        // Import recommendation
+        async function importRecommendation(id) {
+            try {
+                await fetchAPI(`/recommendations/${id}/import`, { method: 'POST' });
+                showToast('岗位已导入');
+                loadRecommendations();
+                loadJobs();
+            } catch (error) {
+                console.error('Failed to import:', error);
+            }
+        }
+
+        // Prepare application (generate tailored resume)
+        async function prepareApplication(jobId) {
+            try {
+                showToast('正在生成订制简历...');
+                await fetchAPI(`/jobs/${jobId}/prepare`, { method: 'POST' });
+                showToast('简历已生成，请在前端查看');
+                loadApplications();
+            } catch (error) {
+                console.error('Failed to prepare application:', error);
+            }
+        }
+
+        // Refresh recommendations
+        async function refreshRecommendations() {
+            try {
+                showToast('正在刷新推荐...');
+                await fetchAPI('/recommendations/refresh', { method: 'POST' });
+                showToast('推荐已刷新');
+                loadRecommendations();
+            } catch (error) {
+                console.error('Failed to refresh:', error);
+            }
+        }
+
+        // Clear recommendations
+        async function clearRecommendations() {
+            if (!confirm('确定要清空所有推荐岗位吗？')) return;
+            try {
+                await fetchAPI('/recommendations/clear', { method: 'POST' });
+                showToast('推荐已清空');
+                loadRecommendations();
+            } catch (error) {
+                console.error('Failed to clear:', error);
+            }
+        }
+
+        // Clear jobs
+        async function clearJobs() {
+            if (!confirm('确定要清空所有岗位列表吗？')) return;
+            try {
+                await fetchAPI('/jobs/clear', { method: 'POST' });
+                showToast('岗位列表已清空');
+                loadJobs();
+            } catch (error) {
+                console.error('Failed to clear:', error);
+            }
+        }
+
+        // Load page data
+        function loadPageData(page) {
+            switch (page) {
+                case 'overview': loadOverview(); break;
+                case 'resume': loadResume(); break;
+                case 'recommendations': loadRecommendations(); break;
+                case 'jobs': loadJobs(); break;
+                case 'applications': loadApplications(); break;
+                case 'settings': loadSettings(); break;
+            }
+        }
+
+        // Initial load
+        loadOverview();
+    </script>
+</body>
+</html>

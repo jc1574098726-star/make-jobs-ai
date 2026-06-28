@@ -8,23 +8,38 @@ async function request(path, options = {}) {
         ...(options.headers || {}),
       };
 
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  // 默认 5 分钟超时（爬虫需要较长时间）
+  const timeout = options.timeout || 300000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
 
-  if (!response.ok) {
-    let message = 'Request failed';
-    try {
-      const data = await response.json();
-      message = data.detail || message;
-    } catch {
-      message = `${message}: ${response.status}`;
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      let message = 'Request failed';
+      try {
+        const data = await response.json();
+        message = data.detail || message;
+      } catch {
+        message = `${message}: ${response.status}`;
+      }
+      throw new Error(message);
     }
-    throw new Error(message);
-  }
 
-  return response.status === 204 ? null : response.json();
+    return response.status === 204 ? null : response.json();
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('请求超时，请稍后重试');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function fetchOverview() {
@@ -47,6 +62,14 @@ export function uploadResume(file) {
   });
 }
 
+export function generateBeautifiedResume() {
+  return request('/resume-profile/generate/beautified', { method: 'POST' });
+}
+
+export function generateMarketResume() {
+  return request('/resume-profile/generate/market', { method: 'POST' });
+}
+
 export function importJob(payload) {
   return request('/jobs/import', {
     method: 'POST',
@@ -61,8 +84,8 @@ export function fetchUrl(url) {
   });
 }
 
-export function prepareApplication(jobId) {
-  return request(`/jobs/${jobId}/prepare`, {
+export function prepareApplication(jobId, matchMode = 'local') {
+  return request(`/jobs/${jobId}/prepare?match_mode=${matchMode}`, {
     method: 'POST',
   });
 }

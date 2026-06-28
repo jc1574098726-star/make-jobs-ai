@@ -87,7 +87,7 @@ def get_job(job_id: int, session: Session = Depends(get_session)) -> JobView:
 
 
 @router.post("/{job_id}/prepare", response_model=PreparedApplicationResponse)
-def prepare_application(job_id: int, session: Session = Depends(get_session)) -> PreparedApplicationResponse:
+def prepare_application(job_id: int, match_mode: str = "local", session: Session = Depends(get_session)) -> PreparedApplicationResponse:
     job = session.get(JobRecord, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -101,7 +101,9 @@ def prepare_application(job_id: int, session: Session = Depends(get_session)) ->
     analysis: MatchAnalysis = matcher_service.analyze(
         profile, job_view.skills, job_view.responsibilities,
         job_title=job_view.job_title, company_name=job_view.company_name,
+        use_api=(match_mode == "ai"),
     )
+
     (
         summary,
         selected_skills,
@@ -114,10 +116,35 @@ def prepare_application(job_id: int, session: Session = Depends(get_session)) ->
     ) = customizer_service.build(profile, job_view, analysis)
 
     selected_experiences_dict = {
-        "internships": selected_internships,
-        "projects": selected_projects,
-        "campus": selected_campus,
+        "internships": [e.model_dump() for e in selected_internships],
+        "projects": [e.model_dump() for e in selected_projects],
+        "campus": [e.model_dump() for e in selected_campus],
     }
+
+    existing_app = session.exec(
+        select(ApplicationRecord).where(ApplicationRecord.job_id == job_id)
+    ).first()
+
+    if existing_app:
+        existing_tailored = session.get(TailoredResumeRecord, existing_app.tailored_resume_id)
+        if existing_tailored:
+            existing_tailored.match_score = analysis.match_score
+            existing_tailored.professional_summary = summary
+            existing_tailored.selected_skills_json = dumps_json(selected_skills)
+            existing_tailored.selected_experiences_json = dumps_json(selected_experiences_dict)
+            existing_tailored.fit_strengths_json = dumps_json(fit_strengths)
+            existing_tailored.fit_gaps_json = dumps_json(fit_gaps)
+            existing_tailored.rendered_markdown = markdown
+            session.add(existing_tailored)
+            session.commit()
+            session.refresh(existing_tailored)
+            tailored_view = tailored_resume_record_to_view(existing_tailored)
+            return PreparedApplicationResponse(
+                job=job_view,
+                analysis=analysis,
+                tailored_resume=tailored_view,
+                application=application_record_to_view(existing_app),
+            )
     tailored_record = TailoredResumeRecord(
         job_id=job.id or 0,
         resume_profile_id=profile.id,

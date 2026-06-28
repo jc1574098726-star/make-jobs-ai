@@ -124,7 +124,14 @@ def update_settings(payload: ApiSettingsInput) -> ApiSettingsView:
 
 @router.post("/test")
 def test_connection(payload: ModelTestRequest) -> Dict:
-    if not payload.api_key:
+    # 如果收到的是掩码，则使用已保存的密钥
+    api_key = payload.api_key
+    if not api_key or api_key == "••••••••" or api_key == "********":
+        saved_key = get_user_api_key()
+        if saved_key:
+            api_key = saved_key
+
+    if not api_key:
         raise HTTPException(status_code=400, detail="API 密钥不能为空")
 
     from app.services.providers import get_provider
@@ -137,9 +144,9 @@ def test_connection(payload: ModelTestRequest) -> Dict:
     api_format = provider["api_format"]
 
     if api_format == "openai":
-        return _test_openai(payload.api_key, base_url, payload.model, provider)
+        return _test_openai(api_key, base_url, payload.model, provider)
     else:
-        return _test_anthropic(payload.api_key, base_url, payload.model, provider)
+        return _test_anthropic(api_key, base_url, payload.model, provider)
 
 
 def _test_openai(api_key: str, base_url: str, model: str, provider: Dict) -> Dict:
