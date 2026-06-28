@@ -25,6 +25,12 @@
   playwright install chromium
   ```
 
+
+<img width="1709" height="388" alt="image" src="https://github.com/user-attachments/assets/7f0ac7d5-072f-494a-8c91-431f427bf2fd" />
+<img width="1755" height="934" alt="image" src="https://github.com/user-attachments/assets/0d0e6235-f0b8-4634-be05-d9f23b7f2a5c" />
+<img width="926" height="481" alt="image" src="https://github.com/user-attachments/assets/a56b6e96-92f9-40d9-8319-a4f56d6f3bd9" />
+<img width="907" height="390" alt="image" src="https://github.com/user-attachments/assets/c39483d0-6699-45e7-be0b-da9aadeac1fa" />
+
 ## 快速开始
 
 ### 1. 克隆项目
